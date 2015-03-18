@@ -76,6 +76,7 @@ def do_features_list(database, table):
     select = flask.request.args.get('select', default='')
     limit = flask.request.args.get('limit')
     order_by = flask.request.args.get('orderBy')
+    intersects = flask.request.args.get('intersects')
     try:
       f = Features(_INSTANCE, database)
     except MySQLdb.OperationalError as e:
@@ -85,7 +86,8 @@ def do_features_list(database, table):
                             status=500)
 
     feature_collection = f.list(table, select, where,
-                                limit=limit, order_by=order_by)
+                                limit=limit, order_by=order_by,
+                                intersects=intersects)
     if 'error' in feature_collection:
         return flask.Response(response=json.dumps(feature_collection),
                               mimetype='application/json',
@@ -180,7 +182,8 @@ class Features(object):
         self._db.close()
 
     # TODO: Add more methods for Create/Update/Delete features, and tables.
-    def list(self, table, select, where, limit=None, order_by=None):
+    def list(self, table, select, where,
+             limit=None, order_by=None, intersects=None):
         """Send the query to the database and return the result as GeoJSON.
 
         Args:
@@ -190,6 +193,8 @@ class Features(object):
           where: A valid SQL where statement. Also needs a lot of checking.
           limit: The limit the number of returned entries.
           order_by: A valid SQL order by statement.
+          intersects: A geometry that the result should intersect. Supports both
+              WKT and GeoJSON
 
         Returns:
           A GeoJSON FeatureCollection representing the returned features, or
@@ -206,6 +211,46 @@ class Features(object):
         else:
             select = 'AsWKT(%s) as wktgeom' % _GEOMETRY_FIELD
 
+        if intersects:
+            logging.debug('Exploring the intersects parameter: %s', intersects)
+            geometry_statement = None
+            # is it WKT?
+            try:
+                geometry_statement = "GeomFromText('%s')" % (
+                    geomet.wkt.dumps(geomet.wkt.loads(intersects)))
+            except ValueError as err:
+                logging.debug('    ... not WKT')
+            # is it GeoJSON?
+            if not geometry_statement:
+                try:
+                    geometry_statement = "GeomFromText('%s')" % (
+                        geomet.wkt.dumps(geojson.loads(intersects)))
+                except ValueError as err:
+                    logging.debug('    ... not GeoJSON')
+            if not geometry_statement and 'CIRCLE' in intersects:
+                # now see if it a CIRCLE(long lat, rad_in_m)
+                re_res = re.findall(
+                    r'CIRCLE\s*\(\s*([0-9.]+)\s+([0-9.]+)\s*,\s*([0-9.]+)\s*\)',
+                    intersects)
+                if len(re_res[0]) == 3:
+                    lng = float(re_res[0][0])
+                    lat = float(re_res[0][1])
+                    rad = float(re_res[0][2])
+                    geometry_statement = ('Buffer(POINT(%f, %f), %f)' %
+                              (lng, lat, (rad/1000/111.045)))
+                    logging.debug('%s becomes %s', intersects,
+                                  geometry_statement)
+                else:
+                    logging.warn('ignoring malformed intersects statement:%s',
+                                 intersects)
+
+            # append the intersection to the where clause.
+            if geometry_statement:
+                if where:
+                    where = '(%s) and ST_Intersects(geometry, %s)' % (
+                        where, geometry_statement)
+                else:
+                    where = 'ST_Intersects(geometry, %s)' % geometry_statement
         # Build the query.
         query = ['select %(select)s from %(id)s where %(where)s' % {
             'id': table,
