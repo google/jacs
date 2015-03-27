@@ -1,9 +1,11 @@
-## Python CloudSQL Query Library for Google App Engine
+## JACS: (Geo)Json API for Cloud SQL
 
-A demonstration on how to use appengine for building a geospatial application 
-based on [CloudSQL](https://cloud.google.com/sql/docs). This appengine 
-application implements the backend server that your Google Maps API application 
-can use to query your geospatial data.
+JACS is an App Engine application the exposes an API for accessing geospatial
+data located in [Cloud SQL](https://cloud.google.com/sql/docs).
+
+The API mimics the Google Maps Engine API, and provides a convenient way 
+for your Google Maps API application to fetch data for the Data Layer, without
+needing to maintain a SQL nor web server.
 
 ## Run Locally
 1. Install the [App Engine Python SDK](https://developers.google.com/appengine/downloads).
@@ -13,7 +15,7 @@ See the README file for directions. You'll need python 2.7 and [pip 1.4 or later
    Note: App Engine can only import libraries from inside your project directory.
 
    ```
-   cd project-wander-api
+   cd jacs
    pip install -r requirements.txt -t lib
    ```
 3. Run this project locally from the command line:
@@ -41,8 +43,8 @@ To deploy the application:
 1. Congratulations!  Your application is now live at your-app-id.appspot.com
 
 ## Next Steps
-This skeleton includes `TODO` markers to help you find basic areas you will want
-to customize.
+You need to populate you Cloud SQL database with geospatial data, and create a
+front-end application to display your map data. You can host the HTML and javascript in the same App Engine instance.
 
 ### Installing Libraries
 See the [Third party
@@ -60,6 +62,10 @@ See [CONTRIB.md](CONTRIB.md)
 
 ## Licensing
 See [LICENSE](LICENSE)
+
+## Not a Google product
+This is not an official Google product (experimental or otherwise), it is
+just code that happens to be owned by Google.
 
 ## Author
 Wolf Bergenheim
