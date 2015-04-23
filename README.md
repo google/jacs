@@ -1,11 +1,11 @@
 ## JACS: (Geo)Json API for Cloud SQL
 
-JACS is an App Engine application the exposes an API for accessing geospatial
+JACS is an App Engine application that exposes an API for accessing geospatial
 data located in [Cloud SQL](https://cloud.google.com/sql/docs).
 
 The API mimics the Google Maps Engine API, and provides a convenient way 
 for your Google Maps API application to fetch data for the Data Layer, without
-needing to maintain a SQL nor web server.
+needing to maintain a SQL Database or web server.
 
 ## Run Locally
 1. Install the [App Engine Python SDK](https://developers.google.com/appengine/downloads).
