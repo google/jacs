@@ -37,30 +37,67 @@ import traceback
 import MySQLdb
 import re
 
+import sqlalchemy
+
 # flask, geojson,geomet and sqlparse are external dependencies.
 # Install them by running pip install -r requirements.txt -t lib
-import flask
-import geojson
-import geomet.wkb
-import geomet.wkt
 import sqlparse
 
+import flask
+
+import geojson
+
+from google.appengine.api import users
+from google.appengine.api import oauth
+
+import jacs.features
+import jacs.auth
+
+
+CLIENT_SECRETS = os.path.join(os.path.dirname(__file__), 'client_secrets.json')
+
+
+
+
+
 # This is your CloudSQL instance
-_INSTANCE = 'project-lightning-strike:dev-eu'
+#_INSTANCE = 'project-lightning-strike:dev-eu'
+_INSTANCE = 'valued-rigging-830:test3'
 _GEOMETRY_FIELD = 'geometry'
 # This is the host to connect to in the dev server.
 # This can be the IP address of your CloudSQL server, if you want to test that.
-_MYSQL_HOST = 'localhost'
+#_MYSQL_HOST = 'localhost'
+_MYSQL_HOST = '173.194.250.121'
+_MYSQL_DATABASE = 'db1'
 _MYSQL_USER = 'root'
 _MYSQL_PASSWORD = 'changeme'
+
+
+
+
+_SQL_ENGINE='mysql+mysqldb://%(username)s:%(password)s@%(host)s/%(database)s' % {
+        'username': _MYSQL_USER,
+        'password': _MYSQL_PASSWORD,
+        'host': _MYSQL_HOST,
+        'database': _MYSQL_DATABASE,
+        'instance': _INSTANCE
+        }
 
 # Note: We don't need to call run() since our application is embedded within
 # the App Engine WSGI application server.
 app = flask.Flask(__name__)
 
+@app.before_request
+def before_request():
+    flask.g.engine = sqlalchemy.create_engine(_SQL_ENGINE, echo=True)
 
-@app.route('/tables/<database>:<table>/features')
-def do_features_list(database, table):
+    try:
+        flask.g.features = jacs.features.Features(flask.g.engine, _GEOMETRY_FIELD)
+    except sqlalchemy.exc.DBAPIError as e:
+        build_response({'error': 'Database Error %s' % str(e), 'status': 500})
+
+@app.route('/tables/<table>/features')
+def do_features_list(table):
     """Handle the parsing of the request and return the geojson.
 
     This routes all the /tables/... requests to the handler.
@@ -77,27 +114,55 @@ def do_features_list(database, table):
     limit = flask.request.args.get('limit')
     order_by = flask.request.args.get('orderBy')
     intersects = flask.request.args.get('intersects')
+    offset = flask.request.args.get('offset')
+
+    result = flask.g.features.list(table, select, where,
+        limit=limit, offset=offset, order_by=order_by,
+        intersects=intersects)
+
+    return build_response(result, geojson.dumps)
+
+@app.route('/tables/<table>/features/batchInsert', methods=['POST'])
+def do_feature_create(table):
+    
+    result = flask.g.features.create(table, flask.request.data)
+    return build_response(result)
+
+@app.route('/tables/<table>/features/batchPatch', methods=['PATCH'])
+def do_feature_update(table):
+    
+
+    result = flask.g.features.update(table,flask.request.data)
+    return build_response(result)
+
+@app.route('/tables/<table>/features/batchDelete', methods=['POST'])
+def do_feature_delete(table):
+
+    where = flask.request.args.get('where')
+    limit = flask.request.args.get('limit')
+    order_by = flask.request.args.get('order_by')
     try:
-      f = Features(_INSTANCE, database)
-    except MySQLdb.OperationalError as e:
-      error = {'error': 'Database Error %s' % str(e)}
-      return flask.Response(response=json.dumps(error),
-                            mimetype='application/json',
-                            status=500)
+        data = json.loads(flask.request.data)
+    except ValueError as e:
+        build_response({'error':"Unable to parse request data. %s" % (e), 'status': 401})
+    keys = data['primary_keys'] 
+    result = flask.g.features.delete(table, keys, where=where,
+            limit=limit, order_by=order_by)
 
-    feature_collection = f.list(table, select, where,
-                                limit=limit, order_by=order_by,
-                                intersects=intersects)
-    if 'error' in feature_collection:
-        return flask.Response(response=json.dumps(feature_collection),
-                              mimetype='application/json',
-                              status=500)
-    else:
-        return flask.Response(
-            response=geojson.dumps(feature_collection, sort_keys=True),
+    return build_response(result)
+
+def build_response(result, method=json.dumps):
+    status = 200
+    if 'status' in result:
+        status = result['status']
+    if 'error' in result:
+        method = json.dumps
+        if status is None:
+            status = 500
+    return flask.Response(
+            response=method(result),
             mimetype='application/json',
-            status=200)
-
+            status = status)
 
 @app.route('/pip/<database>:<table>')
 def do_pip(database, table):
@@ -116,18 +181,20 @@ def do_pip(database, table):
     lng = float(flask.request.args.get('lng', default=0.0))
     select = flask.request.args.get('select', default='')
     try:
-      pip = PointInPolygon(_INSTANCE, database, table)
+        pip = PointInPolygon(_INSTANCE, database, table)
     except MySQLdb.OperationalError as e:
-      error = {'error': 'Database Error %s' % str(e)}
-      return flask.Response(response=json.dumps(error),
-                            mimetype='application/json',
-                            status=500)
+        error = {'error': 'Database Error %s' % str(e)}
+    return flask.Response(
+            response=json.dumps(error),
+            mimetype='application/json',
+            status=500)
 
     polygon = pip.pip(lat, lng, select)
     if 'error' in polygon:
-        return flask.Response(response=json.dumps(polygon),
-                              mimetype='application/json',
-                              status=500)
+        return flask.Response(
+            response=json.dumps(polygon),
+            mimetype='application/json',
+            status=500)
     else:
         return flask.Response(
             response=geojson.dumps(polygon, sort_keys=True),
@@ -146,182 +213,6 @@ def internal_error(_):
     """Return a custom 500 error."""
     return 'Sorry, unexpected error: {}'.format(traceback.format_exc()), 500
 
-
-class Features(object):
-    """Implements the tables endpoint in the REST API.
-
-    This class handles all tables/{db}:{table}/features requests.
-    """
-
-    def __init__(self, instance, database):
-        """Set up a database connection to the cloud SQL server.
-
-
-        Args:
-          instance: The name of the CloudSQL instance.
-          database: The name of the database to use.
-        """
-        # Keep track of the db instance.
-        self._instance = instance
-        # The name of the database to use.
-        self._database = database
-        self._connect()
-
-    def _connect(self):
-        if (os.getenv('SERVER_SOFTWARE') and
-            os.getenv('SERVER_SOFTWARE').startswith('Google App Engine/')):
-            socket_name = '/cloudsql/%s' % self._instance
-            self._db = MySQLdb.connect(unix_socket=socket_name,
-                                       db=self._database, user='root')
-        else:
-            self._db = MySQLdb.connect(host=_MYSQL_HOST, port=3306,
-                                       db=self._database, user=_MYSQL_USER,
-                                       passwd=_MYSQL_PASSWORD)
-
-    def __del__(self):
-        self._db.close()
-
-    # TODO: Add more methods for Create/Update/Delete features, and tables.
-    def list(self, table, select, where,
-             limit=None, order_by=None, intersects=None):
-        """Send the query to the database and return the result as GeoJSON.
-
-        Args:
-          table: The Table to use.
-          select: A comma-separated list of columns to use. Anything that is
-              valid SQL is accepted. This value needs rigorous error checking.
-          where: A valid SQL where statement. Also needs a lot of checking.
-          limit: The limit the number of returned entries.
-          order_by: A valid SQL order by statement.
-          intersects: A geometry that the result should intersect. Supports both
-              WKT and GeoJSON
-
-        Returns:
-          A GeoJSON FeatureCollection representing the returned features, or
-              a dict explaining the error.
-        """
-
-        cursor = self._db.cursor()
-        features = []
-        cols = []
-        # Add the geometry column to the query. This assumes that geometry is
-        # not in the selected columns.
-        if select:
-            select = '%s,AsWKT(%s) as wktgeom' % (select, _GEOMETRY_FIELD)
-        else:
-            select = 'AsWKT(%s) as wktgeom' % _GEOMETRY_FIELD
-
-        if intersects:
-            logging.debug('Exploring the intersects parameter: %s', intersects)
-            geometry_statement = None
-            # is it WKT?
-            try:
-                geometry_statement = "GeomFromText('%s')" % (
-                    geomet.wkt.dumps(geomet.wkt.loads(intersects)))
-            except ValueError as err:
-                logging.debug('    ... not WKT')
-            # is it GeoJSON?
-            if not geometry_statement:
-                try:
-                    geometry_statement = "GeomFromText('%s')" % (
-                        geomet.wkt.dumps(geojson.loads(intersects)))
-                except ValueError as err:
-                    logging.debug('    ... not GeoJSON')
-            if not geometry_statement and 'CIRCLE' in intersects:
-                # now see if it a CIRCLE(long lat, rad_in_m)
-                re_res = re.findall(
-                    r'CIRCLE\s*\(\s*([0-9.]+)\s+([0-9.]+)\s*,\s*([0-9.]+)\s*\)',
-                    intersects)
-                if len(re_res[0]) == 3:
-                    lng = float(re_res[0][0])
-                    lat = float(re_res[0][1])
-                    rad = float(re_res[0][2])
-                    geometry_statement = ('Buffer(POINT(%f, %f), %f)' %
-                              (lng, lat, (rad/1000/111.045)))
-                    logging.debug('%s becomes %s', intersects,
-                                  geometry_statement)
-                else:
-                    logging.warn('ignoring malformed intersects statement:%s',
-                                 intersects)
-
-            # append the intersection to the where clause.
-            if geometry_statement:
-                if where:
-                    where = '(%s) and ST_Intersects(geometry, %s)' % (
-                        where, geometry_statement)
-                else:
-                    where = 'ST_Intersects(geometry, %s)' % geometry_statement
-        # Build the query.
-        query = ['select %(select)s from %(id)s where %(where)s' % {
-            'id': table,
-            'select': select,
-            'where': where
-        }]
-        if order_by:
-            query.append('order by %s' % order_by)
-        if limit:
-            query.append('limit %s' % limit)
-
-        # Convert the list to a string.
-        query_string = ' '.join(query)
-        logging.info('query = "%s"', query_string)
-        if len(sqlparse.split(query_string)) > 1:
-          return {'error': 'invalid parameter'}
-        rows = []
-        try:
-            cursor.execute(' '.join(query))
-            cols = [(i[0],i[1]) for i in cursor.description]
-            rows = cursor.fetchall()
-        except MySQLdb.Error as e:
-            # This error should probably be made better in a production system.
-            return {'error': 'Something went wrong: {}'.format(e)}
-
-        # Give each feature a unique ID.
-        feature_id = 0
-        # now we read the rows and generate geojson out of them.
-        for row in rows:
-            wktgeom = row[-1]
-            props = {}
-            for i in range(len(row)-1):
-                if row[i] is None:
-                    logging.debug('skipping NULL value for column %s ',
-                                 cols[i][0])
-                elif cols[i][1] == 246:
-                    logging.debug('%s = %d', cols[i][0], row[i])
-                    props[cols[i][0]] = int(row[i])
-                elif cols[i][1] == 251:
-                    logging.debug('LONG_BLOB, possibly WKT')
-                    value = ''
-                    try:
-                        props[cols[i][0]] = geomet.wkt.loads(row[i])
-                        logging.debug('WKT, convert to json: %s=%s',
-                                      cols[i][0], props[cols[i][0]])
-                    except ValueError as value_error:
-                        logging.debug('Not WKT, so ignoring')
-
-                elif cols[i][1] == 255 or cols[i][1] == 252:
-                    logging.debug('SKIPPING BINARY DATA')
-                elif cols[i][1] > 200:
-                    logging.debug('stringifying data of type %d: %s=%s',
-                                 cols[i][1], cols[i][0], row[i])
-                    props[cols[i][0]] = str(row[i])
-                else:
-                    logging.debug('%s = %s', cols[i][0], row[i])
-                    props[cols[i][0]] = row[i]
-            #props = dict(zip(cols[:-1], row[:-1]))
-            # geomet.wkt.loads returns a dict which corresponds to the geometry
-            # We dump this as a string, and let geojson parse it
-            geom = geojson.loads(json.dumps(geomet.wkt.loads(wktgeom)))
-            # Turn the geojson geometry into a proper GeoJSON feature
-            feature = geojson.Feature(geometry=geom, properties=props,
-                                      id=feature_id)
-            feature_id += 1
-            # Add the feature to our list of features.
-            features.append(feature)
-        # Close the cursor, now that we are done with it.
-        cursor.close()
-        # Return the list of features as a FeatureCollection.
-        return geojson.FeatureCollection(features)
 
 
 class PointInPolygon(object):
@@ -356,6 +247,6 @@ class PointInPolygon(object):
         """
         point = "GeomFromText('POINT(%f %f)')" % (lng, lat)
         return self._features.list(
-            self._table, fields,
-            'ST_CONTAINS(%s,%s)' % (_GEOMETRY_FIELD, point),
-            limit=1)
+                self._table, fields,
+                'ST_CONTAINS(%s,%s)' % (_GEOMETRY_FIELD, point),
+                limit=1)
