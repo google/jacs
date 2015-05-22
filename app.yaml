@@ -35,5 +35,5 @@ handlers:
 # project directory, either as a git submodule or as a plain subdirectory.
 # TODO: List any other App Engine SDK libs you may need here.
 #libraries:
-#- name: jinja2
-#  version: latest
+- name: MySQLdb
+  version: latest
