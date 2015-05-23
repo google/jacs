@@ -9,5 +9,4 @@ class Geometry(UserDefinedType):
         return func.ST_GeomFromText(bindvalue, type_=self)
 
     def column_expression(self, col):
-        return func.ST_AsText(col, type_=self)
-
+        return func.ST_AsWkb(col, type_=self)

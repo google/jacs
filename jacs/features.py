@@ -128,22 +128,19 @@ class Features(object):
 
         # now we read the rows and generate geojson out of them.
         for row in rows:
-            logging.info(row.items())
-            wktgeom = row[self._geometry_field]
-            logging.info(wktgeom)
+            wkbgeom = row[self._geometry_field]
             props = {}
             result_columns = row.items()
             for column in result_columns:
-                logging.info(column)
                 if column[1] is not None and column[0] != self._geometry_field:
                     if isinstance(column[1], decimal.Decimal):
                         props[column[0]] = float(column[1])
                     else:
                         props[column[0]] = str(column[1])
 
-            # geomet.wkt.loads returns a dict which corresponds to the geometry
+            # geomet.wkb.loads returns a dict which corresponds to the geometry
             # We dump this as a string, and let geojson parse it
-            geom = geojson.loads(json.dumps(geomet.wkt.loads(wktgeom)))
+            geom = geojson.loads(json.dumps(geomet.wkb.loads(wkbgeom)))
 
             feature_id = props[primary_key.name]
 
