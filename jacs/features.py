@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import decimal
 import logging
 import json
 
@@ -49,10 +50,10 @@ class Features(object):
 
     def initialize_table(self, table):
         return sqlalchemy.Table(
-                table, self._metadata, 
+                table, self._metadata,
                 sqlalchemy.Column(self._geometry_field, types.Geometry),
                 autoload=True, autoload_with=self._engine)
-    
+
     def list(self, table, select, where,
              limit=None, offset=None, order_by=None, intersects=None):
         """Send the query to the database and return the result as GeoJSON.
@@ -75,39 +76,37 @@ class Features(object):
 
         if not auth.authorize("read", table):
             return error_message('Unauthorized', status=401)
-        
         features = []
         cols = []
-        
-        # Add the geometry column to the query. This assumes that geometry is
-        # not in the selected columns.
-        
-        # Build the query.
-        
-        
+
         tbl = self.initialize_table(table)
         primary_key = get_primary_key(tbl)
-        select_list = [] 
-        select = select.split(",")
-        
-        for s in select:
-            if s != primary_key.name and s != "":
-                if s in tbl.c:
-                    select_list.append(sqlalchemy.sql.column(s))
-                else:
-                    select_list.append(sqlalchemy.sql.literal_column(s))
-        #also select geometry
-        select_list.append(tbl.c[self._geometry_field])
-   
-        select_list.append(primary_key.name)
-        
+        select_list = []
+
+        if select:
+            select = select.split(",")
+
+            for s in select:
+                if s != primary_key.name and s != '':
+                    if s in tbl.c:
+                        select_list.append(sqlalchemy.sql.column(s))
+                    else:
+                        select_list.append(sqlalchemy.sql.literal_column(s))
+            # Also select geometry if not already selected.
+            select_list.append(tbl.c[self._geometry_field])
+
+            select_list.append(primary_key.name)
+
+        else:
+            for column in tbl.columns.values():
+                select_list.append(column)
         query = sqlalchemy.sql.select(select_list)
-        
         if intersects:
             logging.debug('Exploring the intersects parameter: %s', intersects)
             geometry = geometry_util.parse_geometry(intersects, True)
             if geometry is not None:
-                query = query.where(sqlalchemy.sql.expression.func.ST_Intersects(self._geometry_field, geometry))
+                query = query.where(sqlalchemy.sql.expression.func.ST_Intersects(
+                    self._geometry_field, geometry))
 
         if where:
             query = query.where(sqlalchemy.text(where))
@@ -137,12 +136,15 @@ class Features(object):
             for column in result_columns:
                 logging.info(column)
                 if column[1] is not None and column[0] != self._geometry_field:
-                    props[column[0]] = column[1]
-                    
+                    if isinstance(column[1], decimal.Decimal):
+                        props[column[0]] = float(column[1])
+                    else:
+                        props[column[0]] = str(column[1])
+
             # geomet.wkt.loads returns a dict which corresponds to the geometry
             # We dump this as a string, and let geojson parse it
             geom = geojson.loads(json.dumps(geomet.wkt.loads(wktgeom)))
-            
+
             feature_id = props[primary_key.name]
 
             # Turn the geojson geometry into a proper GeoJSON feature
@@ -161,7 +163,7 @@ class Features(object):
           features: String of GeoJSON features.
 
         Returns:
-            On success an empty dictionary is returned. 
+            On success an empty dictionary is returned.
             On error, a dictionary with error information is returned.
         """
         if not auth.authorize("write", table):
@@ -182,25 +184,25 @@ class Features(object):
                 verify_attributes(tbl.columns, feature['properties'])
             except ValueError as e:
                 return error_message(e, index=index)
-            
+
             properties = feature['properties']
             #Add the geometry field
             properties[self._geometry_field] = geomet.wkt.dumps(feature['geometry'])
             data.append(properties)
-                    
-        try:    
+
+        try:
             connection = self._engine.connect()
             transaction = connection.begin()
             connection.execute(tbl.insert(), data)
             transaction.commit()
-        except sqlalchemy.exc.SQLAlchemyError as e: 
+        except sqlalchemy.exc.SQLAlchemyError as e:
             transaction.rollback()
-            return error_message("Database error: %s" % e) 
+            return error_message("Database error: %s" % e)
         return []
 
     def update(self, table, features):
         """ Updates a feature with corresponding values. Only properties of the feature
-        that have a value will be updated. If geometry is given, it is replaced. 
+        that have a value will be updated. If geometry is given, it is replaced.
 
         Args:
           table: The Table to use.
@@ -217,7 +219,7 @@ class Features(object):
             features = geojson.loads(features)['features']
         except ValueError as e:
             return error_message("Unable to parse request data. %s" % (e))
-        
+
         tbl = self.initialize_table(table)
         primary_key = get_primary_key(tbl)
         if primary_key is None:
@@ -230,7 +232,7 @@ class Features(object):
             for index, feature in enumerate(features):
                 query = tbl.update()
 
-                feature_id = get_feature_id(primary_key.name, feature)            
+                feature_id = get_feature_id(primary_key.name, feature)
                 if feature_id is None:
                     return error_message("No primary key", index=index)
 
@@ -239,22 +241,22 @@ class Features(object):
                     verify_attributes(tbl.columns, feature['properties'])
                 except ValueError as e:
                     return error_message(e, index=index, feature_id=feature_id)
-                
+
                 query = query.where(primary_key == feature_id)
                 del(feature['properties'][primary_key.name])
 
                 if feature['geometry'] is not None:
                     feature['properties'][self._geometry_field] = feature['geometry']
-                query = query.values(feature['properties']) 
-                connection.execute(query)    
+                query = query.values(feature['properties'])
+                connection.execute(query)
             transaction.commit()
         except sqlalchemy.exc.SQLAlchemyError as e:
             transaction.rollback()
-            return error_message(("Database error: %s" % e), feature_id=feature_id, index=index) 
+            return error_message(("Database error: %s" % e), feature_id=feature_id, index=index)
         return []
 
     def delete(self, table, keys, where=None, limit=None, order_by=None):
-        """ Deletes all features with id in list of keys 
+        """ Deletes all features with id in list of keys
 
         Args:
           table: The Table to use.
@@ -263,7 +265,7 @@ class Features(object):
           limit: max records to delete
           order_by: order of records to delete
         Returns:
-            On success an empty dictionary is returned. 
+            On success an empty dictionary is returned.
             On error, a dictionary with error information is returned.
         """
         if not auth.authorize("write", table):
@@ -274,7 +276,7 @@ class Features(object):
 
 
             query = tbl.delete()
-            
+
             if where is not None:
                 query = query.where(sqlalchemy.text(where))
             if limit is not None:
@@ -317,12 +319,12 @@ def error_message(message, feature_id=None,index=None,status=400):
         error["feature_id"] = feature_id
     if index != None:
         error["index"] = index
-    return error 
+    return error
 
 
 def verify_attributes(columns, attributes):
-    """ Makes sure all attributes are columns in the table 
-    
+    """ Makes sure all attributes are columns in the table
+
     Args:
         columns: list of columns to verify against
         attributes: attributes to check
