@@ -1,0 +1,32 @@
+#jsoninput {
+}
+
+input#key {
+    width: 10em;
+    display: inline-block;
+}
+
+input#layerid {
+    width: 20em;
+    display: inline-block;
+}
+
+textarea#jsonstyle {
+    width: 50em;
+    height: 25em;
+    display: inline-block;
+}
+
+.submit {
+    border: 1px solid #3079ED;
+    background: #4B8DF8;
+    color: #fff;
+    text-decoration: none;
+    text-shadow: 0 1px 0 #888;
+    font: bold 12px Helvetica, Arial, sans-serif;
+    line-height: 2px;
+    height: 18px;
+    display: inline-block;
+    margin: 5px;
+    padding: 10px 10px 14px 9px;
+}

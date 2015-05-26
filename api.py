@@ -287,6 +287,16 @@ def build_response(result, method=json.dumps):
         response=method(result), mimetype='application/json', status = status)
 
 
+@app.route('/api/user/me')
+def do_me():
+    user = jacs.auth.get_user(flask.request.args.get('url'))
+    if not 'userid' in user:
+        user['status'] = 401
+        return build_response(user)
+    else:
+        return build_response(user)
+
+
 @app.route('/pip/<database>:<table>')
 def do_pip(database, table):
     """Handle the parsing of the point in polygon request and return a polygon.
