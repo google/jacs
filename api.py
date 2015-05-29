@@ -72,24 +72,31 @@ _MYSQL_DATABASE = 'db1'
 _MYSQL_USER = 'root'
 _MYSQL_PASSWORD = 'changeme'
 
+_SQL_TEST_ENGINE='mysql+mysqldb://%(username)s:%(password)s@%(host)s/%(database)s' % {
+    'username': _MYSQL_USER,
+    'password': _MYSQL_PASSWORD,
+    'host': _MYSQL_HOST,
+    'database': _MYSQL_DATABASE,
+    'instance': _INSTANCE
+    }
 
-
-
-_SQL_ENGINE='mysql+mysqldb://%(username)s:%(password)s@%(host)s/%(database)s' % {
-        'username': _MYSQL_USER,
-        'password': _MYSQL_PASSWORD,
-        'host': _MYSQL_HOST,
-        'database': _MYSQL_DATABASE,
-        'instance': _INSTANCE
-        }
+_SQL_PROD_ENGINE='mysql+gaerdbms:///%(database)s?instance=%(instance)s' % {
+    'database': _MYSQL_DATABASE,
+    'instance': _INSTANCE
+    }
 
 # Note: We don't need to call run() since our application is embedded within
 # the App Engine WSGI application server.
 app = flask.Flask(__name__)
 
+
 @app.before_request
 def before_request():
-    flask.g.engine = sqlalchemy.create_engine(_SQL_ENGINE, echo=True)
+    if (os.getenv('SERVER_SOFTWARE') and
+        os.getenv('SERVER_SOFTWARE').startswith('Google App Engine/')):
+        flask.g.engine = sqlalchemy.create_engine(_SQL_PROD_ENGINE, echo=False)
+    else:
+        flask.g.engine = sqlalchemy.create_engine(_SQL_TEST_ENGINE, echo=True)
 
     try:
         flask.g.features = jacs.features.Features(flask.g.engine, _GEOMETRY_FIELD)
@@ -122,34 +129,38 @@ def do_features_list(table):
 
     return build_response(result, geojson.dumps)
 
+
 @app.route('/tables/<table>/features/batchInsert', methods=['POST'])
 def do_feature_create(table):
-    
     result = flask.g.features.create(table, flask.request.data)
     return build_response(result)
 
+
 @app.route('/tables/<table>/features/batchPatch', methods=['PATCH'])
 def do_feature_update(table):
-    
-
     result = flask.g.features.update(table,flask.request.data)
     return build_response(result)
 
+
 @app.route('/tables/<table>/features/batchDelete', methods=['POST'])
 def do_feature_delete(table):
-
     where = flask.request.args.get('where')
     limit = flask.request.args.get('limit')
     order_by = flask.request.args.get('order_by')
+    data = {'primary_keys':[]}
     try:
         data = json.loads(flask.request.data)
     except ValueError as e:
-        build_response({'error':"Unable to parse request data. %s" % (e), 'status': 401})
-    keys = data['primary_keys'] 
+        return build_response({
+            'error':"Unable to parse request data. %s" % (e),
+            'status': 400})
+
+    keys = data['primary_keys']
     result = flask.g.features.delete(table, keys, where=where,
             limit=limit, order_by=order_by)
 
     return build_response(result)
+
 
 def build_response(result, method=json.dumps):
     status = 200
@@ -163,6 +174,7 @@ def build_response(result, method=json.dumps):
             response=method(result),
             mimetype='application/json',
             status = status)
+
 
 @app.route('/pip/<database>:<table>')
 def do_pip(database, table):

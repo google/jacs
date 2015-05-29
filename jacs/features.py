@@ -19,16 +19,13 @@ import json
 import geojson
 import geomet.wkb
 import geomet.wkt
-
-import sqlparse
-import MySQLdb
-
 import sqlalchemy
-
+import sqlalchemy.exc
 
 import geometry_util
 import auth
 import types
+
 
 class Features(object):
     """Implements the tables endpoint in the REST API.
@@ -38,12 +35,11 @@ class Features(object):
 
     def __init__(self, engine, geometry_field):
         """
-
-
         Args:
-          connection: A database connection object to query against.
+            engine: A sqlalchemy Cloud SQL engine
+            geometry_field: The field that the geometry is stored in. Typically
+                it is 'geometry'.
         """
-        # Keep track of the db connection.
         self._geometry_field = geometry_field
         self._engine = engine
         self._metadata = sqlalchemy.MetaData()
@@ -85,7 +81,6 @@ class Features(object):
 
         if select:
             select = select.split(",")
-
             for s in select:
                 if s != primary_key.name and s != '':
                     if s in tbl.c:
@@ -94,37 +89,39 @@ class Features(object):
                         select_list.append(sqlalchemy.sql.literal_column(s))
             # Also select geometry if not already selected.
             select_list.append(tbl.c[self._geometry_field])
-
             select_list.append(primary_key.name)
-
         else:
             for column in tbl.columns.values():
                 select_list.append(column)
+
         query = sqlalchemy.sql.select(select_list)
         if intersects:
             logging.debug('Exploring the intersects parameter: %s', intersects)
             geometry = geometry_util.parse_geometry(intersects, True)
             if geometry is not None:
                 query = query.where(sqlalchemy.sql.expression.func.ST_Intersects(
-                    self._geometry_field, geometry))
+                    tbl.columns[self._geometry_field], geometry) == True)
 
         if where:
+            where = '(%s)' % where
             query = query.where(sqlalchemy.text(where))
+
         if limit:
             query = query.limit(limit)
+
         if order_by:
             query = query.order(order_by)
+
         if offset:
             query = query.offset(offset)
 
-        # Convert the list to a string.
+        # Connect and execute the query
         try:
             connection = self._engine.connect()
             rows = connection.execute(query)
         except sqlalchemy.exc.SQLAlchemyError as e:
             # This error should probably be made better in a production system.
             return error_message('Something went wrong: {}'.format(e))
-
 
         # now we read the rows and generate geojson out of them.
         for row in rows:
@@ -135,6 +132,9 @@ class Features(object):
                 if column[1] is not None and column[0] != self._geometry_field:
                     if isinstance(column[1], decimal.Decimal):
                         props[column[0]] = float(column[1])
+                    elif (isinstance(column[1], type('str')) or
+                          isinstance(column[1], type(u'unicode'))):
+                        props[column[0]] = column[1].encode('utf-8', 'ignore')
                     else:
                         props[column[0]] = str(column[1])
 
@@ -205,7 +205,7 @@ class Features(object):
           table: The Table to use.
           features: String of GeoJSON features.
         Returns:
-            On success an empty dictionary is returned. 
+            On success an empty dictionary is returned.
             On error, a dictionary with error information is returned.
         """
         if not auth.authorize("write", table):
@@ -242,7 +242,7 @@ class Features(object):
                 query = query.where(primary_key == feature_id)
                 del(feature['properties'][primary_key.name])
 
-                if feature['geometry'] is not None:
+                if 'geometry' in feature and feature['geometry'] is not None:
                     feature['properties'][self._geometry_field] = feature['geometry']
                 query = query.values(feature['properties'])
                 connection.execute(query)
@@ -271,7 +271,6 @@ class Features(object):
             tbl = self.initialize_table(table)
             primary_key = get_primary_key(tbl)
 
-
             query = tbl.delete()
 
             if where is not None:
@@ -281,13 +280,13 @@ class Features(object):
             if order_by is not None:
                 query = query.order(order_by)
             if keys is not None:
-                query = query.where(primary_key == keys)
+                query = query.where(primary_key.in_(keys))
             try:
                 connection = self._engine.connect()
                 transaction = connection.begin()
                 connection.execute(query)
                 transaction.commit()
-            except sqlalchemy.exc.SqlAlchemyError as e:
+            except sqlalchemy.exc.SQLAlchemyError as e:
                 transaction.rollback()
                 return error_message("Database error: %s" % e)
             return []
@@ -302,6 +301,7 @@ def get_primary_key(table):
             return c
     return None
 
+
 def get_feature_id(primary_key, feature):
     if 'id' in feature and feature['id'] is not None:
         return feature['id']
@@ -309,6 +309,7 @@ def get_feature_id(primary_key, feature):
     if primary_key in properties and properties[primary_key] is not None:
         return feature['properties'][primary_key]
     return None
+
 
 def error_message(message, feature_id=None,index=None,status=400):
     error = {'error': message, 'status': status}
@@ -333,13 +334,6 @@ def verify_attributes(columns, attributes):
            raise ValueError("Invalid attribute: %s" % p)
     return None
 
+
 class ST_Intersects(sqlalchemy.sql.functions.GenericFunction):
     type = sqlalchemy.types.Boolean
-
-
-
-def format_intersects(geometry_statement, geometry_field='geometry'):
-    # append the intersection to the where clause.
-    if geometry_statement:
-        return 'ST_Intersects(%s, %s)' % (geometry_field, geometry_statement)
-    return None
