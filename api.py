@@ -48,6 +48,7 @@ import geojson
 
 import jacs.features
 import jacs.auth
+import jacs.styles
 
 
 CLIENT_SECRETS = os.path.join(os.path.dirname(__file__), 'client_secrets.json')
@@ -295,6 +296,106 @@ def do_me():
         return build_response(user)
     else:
         return build_response(user)
+
+
+@app.route('/styles/formpost', methods=['POST'])
+def styles_formpost():
+    """Saves an uploaded style file, and returns a key to it.
+
+    If the key= URL parameter is given, we use the given key,
+    otherwise generate a key."""
+
+    key = flask.request.args.values('name')
+    logging.debug('POST style with name %s', name)
+    displayRules = flask.request.args.values('displayRules')
+    style = jacs.styles.Styles(displayRules=flask.json.loads(displayRules),
+                               name=name)
+    style.put()
+    return flask.Response(response=style.to_json(),
+                          mimetype='application/json',
+                          status=200)
+
+
+@app.route('/styles/by-name/<name>', methods=['POST'])
+def styles_post_by_name(key):
+    """Saves the style of a layer in the NDB with name as a key."""
+
+    logging.debug('POST by-name with name %s', name)
+    displayRules = flask.request.get_data()
+    style = jacs.styles.Styles(flask.json.loads(displayRules), name=name)
+    style.put()
+    return flask.Response(response=style.to_json(),
+                          mimetype='application/json',
+                          status=200)
+
+
+@app.route('/styles/by-key/<key>', methods=['POST'])
+def styles_post_by_key(key):
+    """Saves the style of a layer in the NDB with name as a key."""
+
+    logging.debug('POST by-key with key %s', name)
+    displayRules = flask.request.get_data()
+    style = jacs.styles.Styles(flask.json.loads(displayRules), key=key)
+    style.put()
+    return flask.Response(response=style.to_json(),
+                          mimetype='application/json',
+                          status=200)
+
+
+@app.route('/styles/by-key/<key>', methods=['GET'])
+def styles_get_by_key(key):
+    """Gets the style json by the key."""
+    style = jacs.styles.Styles(key=key)
+    if not style.found:
+        return flask.Response(response='invalid key',
+                              mimetype='text/plain',
+                              status=404)
+
+    return flask.Response(response=style.to_json(),
+                          mimetype='application/json',
+                          status=200)
+
+
+@app.route('/styles/by-key/<key>/declarative', methods=['GET'])
+def styles_get_declarative_by_key(key):
+    """Generate a JS function to style a feature."""
+    style = jacs.styles.Styles(key=key)
+    if not style.found:
+        return flask.Response(response='invalid key',
+                              mimetype='text/plain',
+                              status=404)
+
+    return flask.Response(response=style.to_js(),
+                          mimetype='application/javascript',
+                          status=200)
+
+
+@app.route('/styles/by-name/<name>', methods=['GET'])
+def styles_get_by_name(name):
+    """Gets the style json by the key."""
+    style = jacs.styles.Styles(name=name)
+    if not style.found:
+        return flask.Response(response='invalid key',
+                              mimetype='text/plain',
+                              status=404)
+
+    return flask.Response(response=style.to_json(),
+                          mimetype='application/json',
+                          status=200)
+
+
+@app.route('/styles/by-name/<name>/declarative', methods=['GET'])
+def styles_get_declarative_by_name(name):
+    """Generate a JS function to style a feature."""
+    style = jacs.styles.Styles(name=name)
+    if not style.found:
+        return flask.Response(response='invalid key',
+                              mimetype='text/plain',
+                              status=404)
+
+    return flask.Response(response=style.to_js(),
+                          mimetype='application/javascript',
+                          status=200)
 
 
 @app.route('/pip/<database>:<table>')
