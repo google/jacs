@@ -34,7 +34,7 @@ class Styles(object):
 
     The styles API allows users to transition their GME layer styles to JACS.
     """
-    __init__(self, displayRules=None, name=None, key=None):
+    def __init__(self, displayRules=None, name=None, key=None):
         self.style = None
         self.found = False
         if displayRules:
@@ -49,7 +49,7 @@ class Styles(object):
                     self.style.displayRules = displayRules
             else:
                 self.style = Style()
-                self.style.displayRules = displayRules)
+                self.style.displayRules = displayRules
                 self.style.name = self.style.key.id()
         elif name:
             self.style = Style.query(Style.name == name).get()
@@ -66,7 +66,7 @@ class Styles(object):
     def to_json(self):
         return flask.json.dumps({
             'name': self.style.name,
-            'id' self.style.key.urlsafe(),
+            'id': self.style.key.urlsafe(),
             'displayRules': self.style.displayRules
         })
 
