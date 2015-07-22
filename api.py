@@ -56,21 +56,12 @@ import jacs.auth
 
 CLIENT_SECRETS = os.path.join(os.path.dirname(__file__), 'client_secrets.json')
 
-
-
-
-
-# This is your CloudSQL instance
-#_INSTANCE = 'project-lightning-strike:dev-eu'
-_INSTANCE = 'valued-rigging-830:test3'
-_GEOMETRY_FIELD = 'geometry'
-# This is the host to connect to in the dev server.
-# This can be the IP address of your CloudSQL server, if you want to test that.
-#_MYSQL_HOST = 'localhost'
-_MYSQL_HOST = '173.194.250.121'
-_MYSQL_DATABASE = 'db1'
-_MYSQL_USER = 'root'
-_MYSQL_PASSWORD = 'changeme'
+_INSTANCE = os.environ['INSTANCE']
+_GEOMETRY_FIELD = os.environ['GEOMETRY_FIELD']
+_MYSQL_HOST = os.environ['MYSQL_HOST']
+_MYSQL_DATABASE = os.environ['MYSQL_DATABASE']
+_MYSQL_USER = os.environ['MYSQL_USER']
+_MYSQL_PASSWORD = os.environ['MYSQL_PASSWORD']
 
 _SQL_TEST_ENGINE='mysql+mysqldb://%(username)s:%(password)s@%(host)s/%(database)s' % {
     'username': _MYSQL_USER,

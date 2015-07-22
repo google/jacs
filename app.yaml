@@ -35,3 +35,14 @@ handlers:
 libraries:
 - name: MySQLdb
   version: latest
+
+# These environment variables configure how your JACS instance talk to your
+# Cloud SQL instance
+# See the Deployment guide: https://github.com/google/jacs/wiki/Deployment-guide
+env_variables:
+  INSTANCE: 'cloud-console-project:cloudsql-instance'
+  GEOMETRY_FIELD: 'geometry'
+  MYSQL_HOST: 'localhost'
+  MYSQL_DATABASE: 'jacs'
+  MYSQL_USER: 'root'
+  MYSQL_PASSWORD: 'changeme'
