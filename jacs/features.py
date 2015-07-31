@@ -294,7 +294,6 @@ class Features(object):
             return error_message("Either list of keys or where statement required")
 
 
-
 def get_primary_key(table):
     for c in table.columns:
         if c.primary_key:

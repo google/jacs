@@ -35,20 +35,15 @@ import logging
 import os
 import traceback
 import MySQLdb
-import re
-
-import sqlalchemy
-
-# flask, geojson,geomet and sqlparse are external dependencies.
-# Install them by running pip install -r requirements.txt -t lib
-import sqlparse
-
-import flask
-
-import geojson
 
 from google.appengine.api import users
+from google.appengine.api import memcache
 from google.appengine.api import oauth
+
+import flask
+import sqlalchemy
+import sqlparse
+import geojson
 
 import jacs.features
 import jacs.auth
@@ -63,7 +58,7 @@ _MYSQL_DATABASE = os.environ['MYSQL_DATABASE']
 _MYSQL_USER = os.environ['MYSQL_USER']
 _MYSQL_PASSWORD = os.environ['MYSQL_PASSWORD']
 
-_SQL_TEST_ENGINE='mysql+mysqldb://%(username)s:%(password)s@%(host)s/%(database)s' % {
+_SQL_TEST_ENGINE='mysql+mysqldb://%(username)s:%(password)s@%(host)s/%(database)s?charset=utf8' % {
     'username': _MYSQL_USER,
     'password': _MYSQL_PASSWORD,
     'host': _MYSQL_HOST,
@@ -71,7 +66,7 @@ _SQL_TEST_ENGINE='mysql+mysqldb://%(username)s:%(password)s@%(host)s/%(database)
     'instance': _INSTANCE
     }
 
-_SQL_PROD_ENGINE='mysql+gaerdbms:///%(database)s?instance=%(instance)s' % {
+_SQL_PROD_ENGINE='mysql+gaerdbms:///%(database)s?instance=%(instance)s?charset=utf8' % {
     'database': _MYSQL_DATABASE,
     'instance': _INSTANCE
     }
@@ -79,7 +74,6 @@ _SQL_PROD_ENGINE='mysql+gaerdbms:///%(database)s?instance=%(instance)s' % {
 # Note: We don't need to call run() since our application is embedded within
 # the App Engine WSGI application server.
 app = flask.Flask(__name__)
-
 
 @app.before_request
 def before_request():
@@ -172,9 +166,7 @@ def build_response(result, method=json.dumps):
         if status is None:
             status = 500
     return flask.Response(
-            response=method(result),
-            mimetype='application/json',
-            status = status)
+        response=method(result), mimetype='application/json', status = status)
 
 
 @app.route('/pip/<database>:<table>')
