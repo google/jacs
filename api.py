@@ -108,11 +108,63 @@ def do_features_list(table):
     intersects = flask.request.args.get('intersects')
     offset = flask.request.args.get('offset')
 
-    result = flask.g.features.list(table, select, where,
-        limit=limit, offset=offset, order_by=order_by,
-        intersects=intersects)
+    cache = memcache.get(flask.request.url)
+    if cache is not None:
+        response = flask.Response(
+            response=cache,
+            mimetype='application/json',
+            status = 200)
+    else:
+        result = flask.g.features.list(
+            table, select, where, limit=limit, offset=offset,
+            order_by=order_by, intersects=intersects)
+        response = build_response(result, build_features_list_response)
+        data = response.get_data()
+        if len(data) < 1000000:
+            logging.info('adding response to memcache with key %s', flask.request.url)
+            memcache.add(flask.request.url, data, 3600)
+    return response
 
-    return build_response(result, geojson.dumps)
+
+def build_features_list_response(result):
+    features = []
+    for feature in result['features']:
+        key = '%s:%d' % (flask.request.base_url, feature['id'])
+        cached_json = memcache.get(key)
+        if cached_json is None:
+            cached_json = geojson.dumps(
+                feature, ensure_ascii=True, check_circular=False,
+                allow_nan=True, encoding="utf-8", sort_keys=False)
+            if len(cached_json) > 1000000:
+                l = len(cached_json)
+                group_count = l / 1000000 + 1
+                group_size = l / group_count
+                groups = range (0, l, group_size) + [l]
+                memcache.add(key, 'sharded:%d' % group_count)
+                for i in range(1, group_count):
+                    g_key = '%s.%d' % (key, i)
+                    shard = cached_json[groups[i-1]:groups[i]]
+                    memcache.add(g_key, shard, 3600)
+            else:
+                memcache.add(key, cached_json, 3600)
+        elif cached_json.startswith('sharded:'):
+            group_count = int(cached_json.split(':')[1])
+            shards = []
+            for i in range(1,group_count+1):
+                g_key = '%s.%d' % (key, i)
+                shard = memcache.get(g_key)
+                if shard is None:
+                    cached_json = geojson.dumps(
+                        feature, ensure_ascii=True, check_circular=False,
+                        allow_nan=True, encoding="utf-8", sort_keys=False)
+                else:
+                    shards.append(shard)
+                if not cached_json:
+                    cached_json = ''.join(shards)
+        features.append(cached_json)
+
+    return '{"type":"FeatureCollection","features":[%s]}' % ','.join(features)
+
 
 
 @app.route('/tables/<table>/features/batchInsert', methods=['POST'])
