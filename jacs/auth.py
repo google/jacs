@@ -36,3 +36,17 @@ def authorize(action, table):
         if users.is_current_user_admin():
             return True
         return False
+
+def get_user(url):
+    """Return the current logged in user, if logged in, otherwise None."""
+    user = users.get_current_user()
+    if user:
+        return {
+            'userid': user.nickname(),
+            'admin': users.is_current_user_admin()
+            }
+    else:
+        return {
+            'url': users.create_login_url(url),
+            'admin': False
+            }
