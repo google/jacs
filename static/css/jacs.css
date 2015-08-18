@@ -1,20 +1,29 @@
+body {
+    font-family: 'Roboto', sans-serif;
+}
+
 #jsoninput {
 }
 
-input#key {
-    width: 10em;
+.input {
+    width: 30em;
+    height: 2em;
     display: inline-block;
+    border: 1px solid #3079ED;
+    margin-left: 1em;
+}
+
+input#key {
 }
 
 input#layerid {
-    width: 20em;
-    display: inline-block;
 }
 
 textarea#jsonstyle {
     width: 50em;
     height: 25em;
-    display: inline-block;
+    display: block;
+    border: 1px solid #3079ED;
 }
 
 .submit {
@@ -23,9 +32,9 @@ textarea#jsonstyle {
     color: #fff;
     text-decoration: none;
     text-shadow: 0 1px 0 #888;
-    font: bold 12px Helvetica, Arial, sans-serif;
-    line-height: 2px;
-    height: 18px;
+    font-weight: bold;
+    font-size: 16px;
+    height: 40px;
     display: inline-block;
     margin: 5px;
     padding: 10px 10px 14px 9px;
