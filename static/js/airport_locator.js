@@ -8,22 +8,17 @@ var featureId = 0;
 var authorized = false;
 var newAirportMarker;
 var fields = [
-  'id',
-  'ident',
-  'type',
-  'name',
-  'elevation_ft',
-  'continent',
-  'iso_country',
-  'iso_region',
-  'municipality',
-  'scheduled_service',
-  'gps_code',
-  'iata_code',
-  'local_code',
-  'home_link',
-  'wikipedia_link',
-  'keywords'
+    'OGR_FID',
+    'abbrev',
+    'featurecla',
+    'gps_code',
+    'iata_code',
+    'location',
+    'name',
+    'natlscale',
+    'scalerank',
+    'type',
+    'wikipedia',
 ];
 
 function initialize() {
@@ -55,7 +50,7 @@ function initialize() {
 
     // reset variables
     airports = [];
-    radius = 5000;
+    radius = 25000;
     attempts = 0;
     var url = createAirportsRequest();
     sendPostRequest(url);
@@ -91,8 +86,7 @@ function createAirportsRequest() {
   var url = '/tables/' + tableId
       + '/features?'
       + '&intersects=CIRCLE(' + lng + ' ' + lat + ', ' + radius + ')'
-//      + '&select=ST_DISTANCE(geometry,ST_POINT(' + lng + ',' + lat + ')) AS distance,geometry,id,type,name,municipality,gx_id'
-      + "&where=type='large_airport' OR type='medium_airport' OR type='small_airport'"
+      + "&where=type NOT LIKE '%military%'"
       + '&limit=15';
 
   return url;
@@ -291,22 +285,17 @@ function createFeature(authResult) {
           ]
         },
         'properties': {
-          'id': document.getElementById('new-id-input').value,
-          'ident': document.getElementById('new-ident-input').value,
-          'type': document.getElementById('new-type-input').value,
-          'name': document.getElementById('new-name-input').value,
-          'elevation_ft': document.getElementById('new-elevation_ft-input').value,
-          'continent': document.getElementById('new-continent-input').value,
-          'iso_country': document.getElementById('new-iso_country-input').value,
-          'iso_region': document.getElementById('new-iso_region-input').value,
-          'municipality': document.getElementById('new-municipality-input').value,
-          'scheduled_service': document.getElementById('new-scheduled_service-input').value,
-          'gps_code': document.getElementById('new-gps_code-input').value,
-          'iata_code': document.getElementById('new-iata_code-input').value,
-          'local_code': document.getElementById('new-local_code-input').value,
-          'home_link': document.getElementById('new-home_link-input').value,
-          'wikipedia_link': document.getElementById('new-wikipedia_link-input').value,
-          'keywords': document.getElementById('new-keywords-input').value,
+	    'OGR_FID': parseInt(document.getElementById('new-id-input').value),
+	    'abbrev': document.getElementById('new-ident-input').value,
+	    'featurecla': 'Airport',
+	    'gps_code': document.getElementById('new-gps_code-input').value,
+	    'iata_code': document.getElementById('new-iata_code-input').value,
+	    'location': document.getElementById('new-location-input').value,
+	    'name': document.getElementById('new-name-input').value,
+	    'natlscale': parseInt(document.getElementById('new-natlscale-input').value),
+	    'scalerank': parseInt(document.getElementById('new-scalerank-input').value),
+	    'type': document.getElementById('new-type-input').value,
+	    'wikipedia': document.getElementById('new-wikipedia_link-input').value,
         }
       }
     ]

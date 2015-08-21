@@ -1,88 +1,85 @@
+<!DOCTYPE html>
 <html>
   <head>
     <title>Airport locator</title>
     <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
     <meta charset="utf-8">
     <style>
-      html, body, #map-canvas, #insert-airport {
-        height: 100%;
-        margin: 0px;
-        padding: 0px
-      }
+html, body, #map-canvas, #insert-airport {
+  height: 100%;
+  margin: 0px;
+  padding: 0px
+}
 
-      #insert-airport {
-        float: right;
-        width: 30%;
-        padding: 10px;
-        overflow: scroll;
-      }
+#insert-airport {
+  float: right;
+  width: 30%;
+  padding: 10px;
+  overflow: scroll;
+}
 
-      .controls {
-        margin-top: 16px;
-        border: 1px solid transparent;
-        border-radius: 2px 0 0 2px;
-        box-sizing: border-box;
-        -moz-box-sizing: border-box;
-        height: 32px;
-        outline: none;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-      }
+.controls {
+  margin-top: 16px;
+  border: 1px solid transparent;
+  border-radius: 2px 0 0 2px;
+  box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  height: 32px;
+  outline: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
 
-      #location-input, #name-input {
-        background-color: #fff;
-        padding: 0 11px 0 13px;
-        width: 400px;
-        font-family: Roboto;
-        font-size: 15px;
-        font-weight: 300;
-        text-overflow: ellipsis;
-      }
+#location-input, #name-input {
+  background-color: #fff;
+  padding: 0 11px 0 13px;
+  width: 400px;
+  font-family: Roboto;
+  font-size: 15px;
+  font-weight: 300;
+  text-overflow: ellipsis;
+}
 
-      #location-input:focus, #name-input:focus {
-        border-color: #4d90fe;
-        margin-left: -1px;
-        padding-left: 14px;
-        width: 401px;
-      }
-
+#location-input:focus, #name-input:focus {
+  border-color: #4d90fe;
+  margin-left: -1px;
+  padding-left: 14px;
+  width: 401px;
+}
     </style>
     <script src="https://maps.googleapis.com/maps/api/js?v=3&signed_in=true&libraries=visualization,places"></script>
     <script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
     <script src="/static/js/airport_locator.js"></script>
   </head>
-  <body onload=initialize();>
+<body onload=initialize();>
     <input id="location-input" class="controls" type="text" placeholder="Enter a location">
     <input type="button" class="controls" value="Authorize" id="authorize-button" style="display: none;"></input>
     <input id="name-input" class="controls" type="text" style="display: none;">
     <input type="button" class="controls" value="Save" id="edit-button" style="display: none;" onClick="authorizeEditName();"></input>
     <input type="button" class="controls" value="Delete" id="delete-button" style="display: none;" onClick="authorizeDeleteFeature();"></input>
     <div id="insert-airport" style="display: none;">
-      <span><strong>Enter information for a new airport</strong></span><br />
-      ID: <input id="new-id-input" class="controls" type="text"><br />
-      Ident: <input id="new-ident-input" class="controls" type="text"><br />
+      <span><strong>Enter information for a new airport</strong></span><br >
+      ID: <input id="new-id-input" class="controls" type="number"><br >
+      Name: <input id="new-name-input" class="controls" type="text"><br >
+      Abbreviation: <input id="new-abbrev-input" class="controls" type="text"><br>
+      GPS Code: <input id="new-gps_code-input" class="controls" type="text"><br>
+      IATA Code: <input id="new-iata_code-input" class="controls" type="text"><br>
+      Location:
+      <select id="new-location-input" class="controls">
+	<option value="terminal">Terminal</option>
+	<option value="parking">Parking</option>
+	<option value="ramp">Ramp</option>
+	<option value="runway">Runway</option>
+	<option value="approximate">Approximate</option>
+      </select><br >
+      Scale: <input id="new-natlscale-input" class="controls" type="number"><br >
+      Rank: <input id="new-scalerank-input" class="controls" type="number"><br >
       Type:
       <select id="new-type-input" class="controls">
-        <option value="small_airport">Small Airport</option>
-        <option value="medium_airport">Medium Airport</option>
-        <option value="large_airport">Large Airport</option>
-      </select><br />
-      Name: <input id="new-name-input" class="controls" type="text"><br />
-      Elevation (ft): <input id="new-elevation_ft-input" class="controls" type="text"><br />
-      Continent: <input id="new-continent-input" class="controls" type="text"><br />
-      ISO country: <input id="new-iso_country-input" class="controls" type="text"><br />
-      ISO region: <input id="new-iso_region-input" class="controls" type="text"><br />
-      Municipality: <input id="new-municipality-input" class="controls" type="text"><br />
-      Scheduled service:
-      <select id="new-scheduled_service-input" class="controls">
-        <option value="no">No</option>
-        <option value="yes">Yes</option>
-      </select><br />
-      GPS code: <input id="new-gps_code-input" class="controls" type="text"><br />
-      IATA code: <input id="new-iata_code-input" class="controls" type="text"><br />
-      Local code: <input id="new-local_code-input" class="controls" type="text"><br />
-      Home link: <input id="new-home_link-input" class="controls" type="text"><br />
-      Wikipedia link: <input id="new-wikipedia_link-input" class="controls" type="text"><br />
-      Keywords: <input id="new-keywords-input" class="controls" type="text"><br />
+	<option value="small">Small Airport</option>
+	<option value="mid">Medium Airport</option>
+	<option value="major">Large Airport</option>
+      </select><br >
+      Wikipedia link: <input id="new-wikipedia-input" class="controls" type="text"><br >
       <input type="button" class="controls" value="Add airport" id="create-button" onClick="authorizeCreateFeature();"></input>
     </div>
     <div id="map-canvas"></div>
