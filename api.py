@@ -124,7 +124,7 @@ def do_features_list(table):
         result = flask.g.features.list(
             table, select, where, limit=limit, offset=offset,
             order_by=order_by, intersects=intersects)
-        response = build_response(result, build_features_list_response)
+        response = build_features_list_response(table, result)
         data = response.get_data()
         if len(data) < 1000000:
             logging.info('adding response to memcache with key %s', flask.request.url)
@@ -135,10 +135,18 @@ def do_features_list(table):
     return response
 
 
-def build_features_list_response(result):
+def build_features_list_response(table, result):
+    status = 200
+    response = ''
+    if 'status' in result:
+        status = result['status']
+    if 'error' in result:
+        if status is None:
+            status = 500
+        response = json.dumps(result)
     features = []
     for feature in result['features']:
-        key = '%s:%d' % (flask.request.base_url, feature['id'])
+        key = '%s:%d' % (table, feature['id'])
         cached_json = memcache.get(key)
         if cached_json is None:
             cached_json = geojson.dumps(
@@ -172,8 +180,9 @@ def build_features_list_response(result):
                     cached_json = ''.join(shards)
         features.append(cached_json)
 
-    return '{"type":"FeatureCollection","features":[%s]}' % ','.join(features)
-
+    response = '{"type":"FeatureCollection","features":[%s]}' % ','.join(features)
+    return flask.Response(
+        response=response, mimetype='application/json', status = status)
 
 
 @app.route('/tables/<table>/features/batchInsert', methods=['POST'])
