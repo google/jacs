@@ -39,6 +39,7 @@ import MySQLdb
 from google.appengine.api import users
 from google.appengine.api import memcache
 from google.appengine.api import oauth
+from google.appengine.ext import ndb
 
 import flask
 import sqlalchemy
@@ -70,6 +71,11 @@ _SQL_PROD_ENGINE='mysql+gaerdbms:///%(database)s?instance=%(instance)s?charset=u
     'database': _MYSQL_DATABASE,
     'instance': _INSTANCE
     }
+
+
+class CacheEntry(ndb.Model):
+    cache_key = ndb.StringProperty()
+
 
 # Note: We don't need to call run() since our application is embedded within
 # the App Engine WSGI application server.
@@ -123,6 +129,9 @@ def do_features_list(table):
         if len(data) < 1000000:
             logging.info('adding response to memcache with key %s', flask.request.url)
             memcache.add(flask.request.url, data, 3600)
+            ancestor_key = ndb.Key("CacheKey", "full_page_keys")
+            cache_entry = CacheEntry(parent=ancestor_key, cache_key=flask.request.url)
+            cache_entry.put()
     return response
 
 
