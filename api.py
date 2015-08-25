@@ -128,7 +128,7 @@ def do_features_list(table):
         data = response.get_data()
         if len(data) < 1000000:
             logging.info('adding response to memcache with key %s', flask.request.url)
-            memcache.add(flask.request.url, data, 3600)
+            memcache.add(flask.request.url, data)
             ancestor_key = ndb.Key("CacheKey", "full_page_keys")
             cache_entry = CacheEntry(parent=ancestor_key, cache_key=flask.request.url)
             cache_entry.put()
@@ -161,9 +161,9 @@ def build_features_list_response(table, result):
                 for i in range(1, group_count):
                     g_key = '%s.%d' % (key, i)
                     shard = cached_json[groups[i-1]:groups[i]]
-                    memcache.add(g_key, shard, 3600)
+                    memcache.add(g_key, shard)
             else:
-                memcache.add(key, cached_json, 3600)
+                memcache.add(key, cached_json)
         elif cached_json.startswith('sharded:'):
             group_count = int(cached_json.split(':')[1])
             shards = []
