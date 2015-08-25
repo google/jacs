@@ -35,20 +35,16 @@ import logging
 import os
 import traceback
 import MySQLdb
-import re
-
-import sqlalchemy
-
-# flask, geojson,geomet and sqlparse are external dependencies.
-# Install them by running pip install -r requirements.txt -t lib
-import sqlparse
-
-import flask
-
-import geojson
 
 from google.appengine.api import users
+from google.appengine.api import memcache
 from google.appengine.api import oauth
+from google.appengine.ext import ndb
+
+import flask
+import sqlalchemy
+import sqlparse
+import geojson
 
 import jacs.features
 import jacs.auth
@@ -63,7 +59,7 @@ _MYSQL_DATABASE = os.environ['MYSQL_DATABASE']
 _MYSQL_USER = os.environ['MYSQL_USER']
 _MYSQL_PASSWORD = os.environ['MYSQL_PASSWORD']
 
-_SQL_TEST_ENGINE='mysql+mysqldb://%(username)s:%(password)s@%(host)s/%(database)s' % {
+_SQL_TEST_ENGINE='mysql+mysqldb://%(username)s:%(password)s@%(host)s/%(database)s?charset=utf8' % {
     'username': _MYSQL_USER,
     'password': _MYSQL_PASSWORD,
     'host': _MYSQL_HOST,
@@ -71,15 +67,19 @@ _SQL_TEST_ENGINE='mysql+mysqldb://%(username)s:%(password)s@%(host)s/%(database)
     'instance': _INSTANCE
     }
 
-_SQL_PROD_ENGINE='mysql+gaerdbms:///%(database)s?instance=%(instance)s' % {
+_SQL_PROD_ENGINE='mysql+gaerdbms:///%(database)s?instance=%(instance)s?charset=utf8' % {
     'database': _MYSQL_DATABASE,
     'instance': _INSTANCE
     }
 
+
+class CacheEntry(ndb.Model):
+    cache_key = ndb.StringProperty()
+
+
 # Note: We don't need to call run() since our application is embedded within
 # the App Engine WSGI application server.
 app = flask.Flask(__name__)
-
 
 @app.before_request
 def before_request():
@@ -114,22 +114,132 @@ def do_features_list(table):
     intersects = flask.request.args.get('intersects')
     offset = flask.request.args.get('offset')
 
-    result = flask.g.features.list(table, select, where,
-        limit=limit, offset=offset, order_by=order_by,
-        intersects=intersects)
+    cache = memcache.get(flask.request.url)
+    if cache is not None:
+        response = flask.Response(
+            response=cache,
+            mimetype='application/json',
+            status = 200)
+    else:
+        result = flask.g.features.list(
+            table, select, where, limit=limit, offset=offset,
+            order_by=order_by, intersects=intersects)
+        response = build_features_list_response(table, result)
+        data = response.get_data()
+        if len(data) < 1000000:
+            logging.info('adding response to memcache with key %s', flask.request.url)
+            memcache.add(flask.request.url, data)
+            ancestor_key = ndb.Key("CacheKey", "full_page_keys")
+            cache_entry = CacheEntry(parent=ancestor_key, cache_key=flask.request.url)
+            cache_entry.put()
+    return response
 
-    return build_response(result, geojson.dumps)
+
+def build_features_list_response(table, result):
+    status = 200
+    response = ''
+    if 'status' in result:
+        status = result['status']
+    if 'error' in result:
+        if status is None:
+            status = 500
+        response = json.dumps(result)
+    features = []
+    for feature in result['features']:
+        key = '%s:%d' % (table, feature['id'])
+        cached_json = memcache.get(key)
+        if cached_json is None:
+            cached_json = geojson.dumps(
+                feature, ensure_ascii=True, check_circular=False,
+                allow_nan=True, encoding="utf-8", sort_keys=False)
+            if len(cached_json) > 1000000:
+                l = len(cached_json)
+                group_count = l / 1000000 + 1
+                group_size = l / group_count
+                groups = range (0, l, group_size) + [l]
+                memcache.add(key, 'sharded:%d' % group_count)
+                for i in range(1, group_count):
+                    g_key = '%s.%d' % (key, i)
+                    shard = cached_json[groups[i-1]:groups[i]]
+                    memcache.add(g_key, shard)
+            else:
+                memcache.add(key, cached_json)
+        elif cached_json.startswith('sharded:'):
+            group_count = int(cached_json.split(':')[1])
+            shards = []
+            for i in range(1,group_count+1):
+                g_key = '%s.%d' % (key, i)
+                shard = memcache.get(g_key)
+                if shard is None:
+                    cached_json = geojson.dumps(
+                        feature, ensure_ascii=True, check_circular=False,
+                        allow_nan=True, encoding="utf-8", sort_keys=False)
+                else:
+                    shards.append(shard)
+                if not cached_json:
+                    cached_json = ''.join(shards)
+        features.append(cached_json)
+
+    response = '{"type":"FeatureCollection","features":[%s]}' % ','.join(features)
+    return flask.Response(
+        response=response, mimetype='application/json', status = status)
+
+
+def clear_page_cache():
+    logging.info('Clearing ALL page caches')
+    ancestor_key = ndb.Key("CacheKey", "full_page_keys")
+    cache_entries = CacheEntry.query(ancestor=ancestor_key).fetch()
+    for cache_entry in cache_entries:
+        memcache.delete(cache_entry.cache_key)
+        logging.info('Cleared cache for %s', cache_entry.cache_key)
+        cache_entry.key.delete()
+
+
+
+def clear_feature_cache(table, keys):
+    if not keys:
+        logging.info('Clearing ALL cached features')
+        memcache.flush_all()
+    else:
+        for k in keys:
+            key = '%s:%s' % (table, k)
+            cache_entry = memcache.get(key)
+            logging.info('Checking if feature %s is in cache: %s', key, cache_entry)
+            if cache_entry:
+                if cache_entry.startswith('sharded:'):
+                    group_count = int(cached_json.split(':')[1])
+                    shards = []
+                    for i in range(1,group_count+1):
+                        g_key = '%s.%d' % (key, i)
+                        memcache.delete(g_key)
+                        logging.info('Cleared cache for %s', g_key)
+                memcache.delete(key)
+                logging.info('Cleared cache for %s', key)
 
 
 @app.route('/tables/<table>/features/batchInsert', methods=['POST'])
 def do_feature_create(table):
     result = flask.g.features.create(table, flask.request.data)
+    clear_page_cache()
     return build_response(result)
 
 
 @app.route('/tables/<table>/features/batchPatch', methods=['PATCH'])
 def do_feature_update(table):
     result = flask.g.features.update(table,flask.request.data)
+    clear_page_cache()
+    keys = []
+    data = {'featires': []}
+    try:
+        data = json.loads(flask.request.data)
+    except ValueError as e:
+        pass
+    for f in data['features']:
+        # we don't know at this point what the PK of this table is,
+        # so assume all fields are.
+        # TODO: Make this better
+        keys = keys + f['properties'].values()
+    clear_feature_cache(table, keys)
     return build_response(result)
 
 
@@ -150,6 +260,8 @@ def do_feature_delete(table):
     result = flask.g.features.delete(table, keys, where=where,
             limit=limit, order_by=order_by)
 
+    clear_page_cache()
+    cleare_feature_cache(table, keys)
     return build_response(result)
 
 
@@ -172,9 +284,7 @@ def build_response(result, method=json.dumps):
         if status is None:
             status = 500
     return flask.Response(
-            response=method(result),
-            mimetype='application/json',
-            status = status)
+        response=method(result), mimetype='application/json', status = status)
 
 
 @app.route('/pip/<database>:<table>')

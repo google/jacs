@@ -30,13 +30,13 @@ def parse_geometry(geometry_raw, rewrite_circle=False):
     except ValueError as err:
         logging.debug('    ... not WKT')
     # is it GeoJSON?
-    if not geometry_statement:
+    if geometry_statement is None:
         try:
             geometry_statement = sqlalchemy.sql.expression.func.GeomFromText(
                 geomet.wkt.dumps(geojson.loads(geometry_raw)))
         except ValueError as err:
             logging.debug('    ... not GeoJSON')
-    if not geometry_statement and rewrite_circle and 'CIRCLE' in geometry_raw:
+    if geometry_statement is None and rewrite_circle and 'CIRCLE' in geometry_raw:
         # now see if it a CIRCLE(long lat, rad_in_m)
         re_res = re.findall(
             r'CIRCLE\s*\(\s*([0-9.-]+)\s+([0-9.-]+)\s*,\s*([0-9.]+)\s*\)',

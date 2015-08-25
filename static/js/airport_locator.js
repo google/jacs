@@ -8,22 +8,14 @@ var featureId = 0;
 var authorized = false;
 var newAirportMarker;
 var fields = [
-  'id',
-  'ident',
-  'type',
-  'name',
-  'elevation_ft',
-  'continent',
-  'iso_country',
-  'iso_region',
-  'municipality',
-  'scheduled_service',
-  'gps_code',
-  'iata_code',
-  'local_code',
-  'home_link',
-  'wikipedia_link',
-  'keywords'
+    'id',
+    'name',
+    'city',
+    'country',
+    'iata_faa',
+    'icao',
+    'alt',
+    'tz_name',
 ];
 
 function initialize() {
@@ -55,7 +47,7 @@ function initialize() {
 
     // reset variables
     airports = [];
-    radius = 5000;
+    radius = 25000;
     attempts = 0;
     var url = createAirportsRequest();
     sendPostRequest(url);
@@ -90,9 +82,7 @@ function createAirportsRequest() {
   var lat = place.geometry.location.lat();
   var url = '/tables/' + tableId
       + '/features?'
-      + '&intersects=CIRCLE(' + lng + ' ' + lat + ', ' + radius + ')'
-//      + '&select=ST_DISTANCE(geometry,ST_POINT(' + lng + ',' + lat + ')) AS distance,geometry,id,type,name,municipality,gx_id'
-      + "&where=type='large_airport' OR type='medium_airport' OR type='small_airport'"
+      + 'intersects=CIRCLE(' + lng + ' ' + lat + ', ' + radius + ')'
       + '&limit=15';
 
   return url;
@@ -108,7 +98,7 @@ function sendPostRequest(url) {
       } else {
         console.error(xmlHttp.statusText);
         // retry the query, up to 3 times
-        if (attempts < 3) {
+        if (attempts < 5) {
           sendPostRequest(url);
           attempts++;
         }
@@ -148,7 +138,7 @@ function displayResults() {
 
   map.data.addListener('click', function(event) {
     if (authorized) {
-      featureId = event.feature.getProperty('OGR_FID');
+      featureId = event.feature.getProperty('id');
 
       var deleteButton = document.getElementById('delete-button');
       deleteButton.style.display = 'block';
@@ -186,7 +176,7 @@ function editName(user) {
     'features': [
       {
         'properties': {
-          'OGR_FID': Number(featureId),
+          'id': Number(featureId),
           'name': nameInput.value
         }
       }
@@ -234,7 +224,7 @@ function deleteFeature(authResult) {
     success: function() {
       // refresh data to reflect the changes
       airports = [];
-      radius = 5000;
+      radius = 25000;
       attempts = 0;
       var url = createAirportsRequest();
       sendPostRequest(url);
@@ -256,7 +246,7 @@ function authorizeCreateFeature() {
 function validateForm() {
   var id = document.getElementById('new-id-input').value;
   var name = document.getElementById('new-name-input').value;
-  var elevation = document.getElementById('new-elevation_ft-input').value;
+  var elevation = document.getElementById('new-alt-input').value;
   if (id == null || id == "") {
     alert("Please enter a (numeric) ID for the airport");
     return false;
@@ -291,22 +281,13 @@ function createFeature(authResult) {
           ]
         },
         'properties': {
-          'id': document.getElementById('new-id-input').value,
-          'ident': document.getElementById('new-ident-input').value,
-          'type': document.getElementById('new-type-input').value,
-          'name': document.getElementById('new-name-input').value,
-          'elevation_ft': document.getElementById('new-elevation_ft-input').value,
-          'continent': document.getElementById('new-continent-input').value,
-          'iso_country': document.getElementById('new-iso_country-input').value,
-          'iso_region': document.getElementById('new-iso_region-input').value,
-          'municipality': document.getElementById('new-municipality-input').value,
-          'scheduled_service': document.getElementById('new-scheduled_service-input').value,
-          'gps_code': document.getElementById('new-gps_code-input').value,
-          'iata_code': document.getElementById('new-iata_code-input').value,
-          'local_code': document.getElementById('new-local_code-input').value,
-          'home_link': document.getElementById('new-home_link-input').value,
-          'wikipedia_link': document.getElementById('new-wikipedia_link-input').value,
-          'keywords': document.getElementById('new-keywords-input').value,
+	    'id': parseInt(document.getElementById('new-id-input').value),
+	    'name': document.getElementById('new-name-input').value,
+	    'city': document.getElementById('new-city-input').value,
+	    'country': document.getElementById('new-country-input').value,
+	    'iata_faa': document.getElementById('new-iata_faa-input').value,
+	    'icao': document.getElementById('new-icao-input').value,
+	    'alt': parseInt(document.getElementById('new-alt-input').value),
         }
       }
     ]
@@ -323,7 +304,7 @@ function createFeature(authResult) {
       newAirportMarker.setMap(null);
       // refresh data to reflect the changes
       airports = [];
-      radius = 5000;
+      radius = 25000;
       attempts = 0;
       var url = createAirportsRequest();
       sendPostRequest(url);

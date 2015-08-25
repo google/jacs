@@ -132,19 +132,14 @@ class Features(object):
                 if column[1] is not None and column[0] != self._geometry_field:
                     if isinstance(column[1], decimal.Decimal):
                         props[column[0]] = float(column[1])
-                    elif (isinstance(column[1], type('str')) or
-                          isinstance(column[1], type(u'unicode'))):
+                    elif isinstance(column[1], type(u'unicode')):
                         props[column[0]] = column[1].encode('utf-8', 'ignore')
                     else:
-                        props[column[0]] = str(column[1])
-
-            # geomet.wkb.loads returns a dict which corresponds to the geometry
-            # We dump this as a string, and let geojson parse it
-            geom = geojson.loads(json.dumps(geomet.wkb.loads(wkbgeom)))
+                        props[column[0]] = column[1]
 
             feature_id = props[primary_key.name]
+            geom = geomet.wkb.loads(wkbgeom)
 
-            # Turn the geojson geometry into a proper GeoJSON feature
             feature = geojson.Feature(geometry=geom, properties=props,
                                       id=feature_id)
             # Add the feature to our list of features.
@@ -292,7 +287,6 @@ class Features(object):
             return []
         else:
             return error_message("Either list of keys or where statement required")
-
 
 
 def get_primary_key(table):
