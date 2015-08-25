@@ -60,26 +60,11 @@ html, body, #map-canvas, #insert-airport {
       <span><strong>Enter information for a new airport</strong></span><br >
       ID: <input id="new-id-input" class="controls" type="number"><br >
       Name: <input id="new-name-input" class="controls" type="text"><br >
-      Abbreviation: <input id="new-abbrev-input" class="controls" type="text"><br>
-      GPS Code: <input id="new-gps_code-input" class="controls" type="text"><br>
-      IATA Code: <input id="new-iata_code-input" class="controls" type="text"><br>
-      Location:
-      <select id="new-location-input" class="controls">
-	<option value="terminal">Terminal</option>
-	<option value="parking">Parking</option>
-	<option value="ramp">Ramp</option>
-	<option value="runway">Runway</option>
-	<option value="approximate">Approximate</option>
-      </select><br >
-      Scale: <input id="new-natlscale-input" class="controls" type="number"><br >
-      Rank: <input id="new-scalerank-input" class="controls" type="number"><br >
-      Type:
-      <select id="new-type-input" class="controls">
-	<option value="small">Small Airport</option>
-	<option value="mid">Medium Airport</option>
-	<option value="major">Large Airport</option>
-      </select><br >
-      Wikipedia link: <input id="new-wikipedia-input" class="controls" type="text"><br >
+      City: <input id="new-city-input" class="controls" type="text"><br>
+      Country: <input id="new-country-input" class="controls" type="text"><br>
+      IATA/FAA Code: <input id="new-iata_faa-input" class="controls" type="text"><br>
+      ICAO Code: <input id="new-icao-input" class="controls" type="text"><br>
+      Altitude: <input id="new-alt-input" class="controls" type="number"><br>
       <input type="button" class="controls" value="Add airport" id="create-button" onClick="authorizeCreateFeature();"></input>
     </div>
     <div id="map-canvas"></div>
