@@ -185,15 +185,61 @@ def build_features_list_response(table, result):
         response=response, mimetype='application/json', status = status)
 
 
+def clear_page_cache():
+    logging.info('Clearing ALL page caches')
+    ancestor_key = ndb.Key("CacheKey", "full_page_keys")
+    cache_entries = CacheEntry.query(ancestor=ancestor_key).fetch()
+    for cache_entry in cache_entries:
+        memcache.delete(cache_entry.cache_key)
+        logging.info('Cleared cache for %s', cache_entry.cache_key)
+        cache_entry.key.delete()
+
+
+
+def clear_feature_cache(table, keys):
+    if not keys:
+        logging.info('Clearing ALL cached features')
+        memcache.flush_all()
+    else:
+        for k in keys:
+            key = '%s:%s' % (table, k)
+            cache_entry = memcache.get(key)
+            logging.info('Checking if feature %s is in cache: %s', key, cache_entry)
+            if cache_entry:
+                if cache_entry.startswith('sharded:'):
+                    group_count = int(cached_json.split(':')[1])
+                    shards = []
+                    for i in range(1,group_count+1):
+                        g_key = '%s.%d' % (key, i)
+                        memcache.delete(g_key)
+                        logging.info('Cleared cache for %s', g_key)
+                memcache.delete(key)
+                logging.info('Cleared cache for %s', key)
+
+
 @app.route('/tables/<table>/features/batchInsert', methods=['POST'])
 def do_feature_create(table):
     result = flask.g.features.create(table, flask.request.data)
+    clear_page_cache()
     return build_response(result)
 
 
 @app.route('/tables/<table>/features/batchPatch', methods=['PATCH'])
 def do_feature_update(table):
     result = flask.g.features.update(table,flask.request.data)
+    clear_page_cache()
+    keys = []
+    data = {'featires': []}
+    try:
+        data = json.loads(flask.request.data)
+    except ValueError as e:
+        pass
+    for f in data['features']:
+        # we don't know at this point what the PK of this table is,
+        # so assume all fields are.
+        # TODO: Make this better
+        keys = keys + f['properties'].values()
+    clear_feature_cache(table, keys)
     return build_response(result)
 
 
@@ -214,6 +260,8 @@ def do_feature_delete(table):
     result = flask.g.features.delete(table, keys, where=where,
             limit=limit, order_by=order_by)
 
+    clear_page_cache()
+    cleare_feature_cache(table, keys)
     return build_response(result)
 
 
