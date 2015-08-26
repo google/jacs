@@ -14,8 +14,7 @@ var fields = [
     'country',
     'iata_faa',
     'icao',
-    'alt',
-    'tz_name',
+    'alt'
 ];
 
 function initialize() {
@@ -264,10 +263,6 @@ function validateForm() {
 
 function createFeature(authResult) {
   var url = "/tables/airports/features/batchInsert";
-
-  for (var i = 0; i < fields.length; i++) {
-    document.getElementById('new-' + fields[i] + '-input').value;
-  }
 
   var data = {
     'features': [
