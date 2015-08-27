@@ -261,7 +261,7 @@ def do_feature_delete(table):
             limit=limit, order_by=order_by)
 
     clear_page_cache()
-    cleare_feature_cache(table, keys)
+    clear_feature_cache(table, keys)
     return build_response(result)
 
 
