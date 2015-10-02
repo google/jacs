@@ -266,16 +266,6 @@ def do_feature_delete(table):
     return build_response(result)
 
 
-@app.route('/api/user/me')
-def do_me():
-    user = jacs.auth.get_user(flask.request.args.get('url'))
-    if not 'userid' in user:
-        user['status'] = 401
-        return build_response(user)
-    else:
-        return build_response(user)
-
-
 def build_response(result, method=json.dumps):
     status = 200
     if 'status' in result:
@@ -317,7 +307,7 @@ def styles_formpost():
 
 
 @app.route('/styles/by-name/<name>', methods=['POST'])
-def styles_post_by_name(key):
+def styles_post_by_name(name):
     """Saves the style of a layer in the NDB with name as a key."""
 
     logging.debug('POST by-name with name %s', name)

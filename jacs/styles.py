@@ -39,7 +39,7 @@ class Styles(object):
         self.found = False
         if displayRules:
             if name:
-                style = Style(displayRules=displayRules, name=name, id=name)
+                self.style = Style(displayRules=displayRules, name=name, id=name)
                 self.found = True
             elif key:
                 style_key = ndb.Key(urlsafe=key)
@@ -70,7 +70,7 @@ class Styles(object):
             'displayRules': self.style.displayRules
         })
 
-    def to_json(self):
+    def to_js(self):
         js = []
         style = self.style.displayRules
         if 'type' in style and style['type'] == 'displayRule':
