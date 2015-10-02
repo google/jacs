@@ -12,7 +12,7 @@
       }
     </style>
     <script src="https://maps.googleapis.com/maps/api/js?v=3.exp&signed_in=true"></script>
-    <script src="https://norse-sector-93012.googleplex.com/styles/ah9lfmdvb2dsZS5jb206bm9yc2Utc2VjdG9yLTkzMDEychMLEgVTdHlsZSIId29ybGRtYXAM/parser"></script>
+    <script src="/styles/by-name/worldmap/declarative"></script>
     <script>
 var map;
 function initialize() {
@@ -21,8 +21,9 @@ function initialize() {
     center: {lat: 10, lng: 0}
   });
 
-  map.data.loadGeoJson('/tables/countries/features?select=iso_a3,mapcolor7,OGR_FID');
-
+  for(i = 1; i < 256; i++) {
+    map.data.loadGeoJson('/tables/countries/features?select=iso_a3,mapcolor7,OGR_FID&where=OGR_FID="' + i + '"');
+  }
   map.data.setStyle(function(feature) {
     console.log('setting style for feature');
     console.log(feature);
