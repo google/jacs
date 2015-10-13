@@ -130,14 +130,15 @@ class Features(object):
             result_columns = row.items()
             for column in result_columns:
                 if column[1] is not None and column[0] != self._geometry_field:
+                    col_key = column[0].encode('utf-8', 'replace')
                     if isinstance(column[1], decimal.Decimal):
-                        props[column[0]] = float(column[1])
+                        props[col_key] = float(column[1])
                     elif isinstance(column[1], type(u'unicode')):
-                        props[column[0]] = column[1].encode('utf-8', 'ignore')
+                        props[col_key] = column[1].encode('utf-8', 'replace')
                     else:
-                        props[column[0]] = column[1]
+                        props[col_key] = column[1]
 
-            feature_id = props[primary_key.name]
+            feature_id = props[primary_key.name.encode('utf-8', 'replace')]
             geom = geomet.wkb.loads(wkbgeom)
 
             feature = geojson.Feature(geometry=geom, properties=props,
